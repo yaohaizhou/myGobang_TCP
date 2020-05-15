@@ -7,56 +7,11 @@
 #include <netinet/in.h>
 #include <pthread.h>
 #include <sys/time.h>
-
-#define DEBUG   //for debug
-#define IP_ADDRESS "39.99.228.164"   // the server's ip
-#define BUFFER_SIZE 200
-#pragma pack(1)   //close the byte alignment
-
-typedef enum chess_msg{
-    blackside = 1,
-    whiteside = -1,
-    blank = 0
-} Chess_Msg;
-
-/*package define*/
-typedef struct package{
-    int function;
-    int extendedFlag;
-    int dataArray[2];
-    int bufferLength;
-    char buf[];
-} Package;
-
-/*the clnt list node define*/
-typedef struct clnt_node{
-    int clnt_sock;
-    struct clnt_node* nextptr;
-} Clnt_Node;
-
-/*game_msg*/
-typedef struct game_msg{
-    pthread_t thread[2];
-    int clnt_sock[2];
-    Chess_Msg bored[15][15];
-    int bored_round[15][15];
-    Chess_Msg worb;
-    char player[2][30];
-    int round_num;
-} Game_Msg;
+#include "serv_define.h"
 
 /*global variable define*/
 int clnt_wait = 0;
 pthread_mutex_t mut;
-
-/*mock to create a package for test*/
-Package* mock_create_package();
-void game_start(pthread_t Thread[],int Clnt_Sock[]);
-void* pthread_func(void* args);
-void thread_wait(pthread_t thread[]);
-void close_game(Game_Msg* gameMsg);
-void create_package(Package* head,int F,int Ex,int arr1,int arr2,int BFL,char* BUF);
-
 
 int main(){
     int serv_sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
@@ -107,18 +62,21 @@ int main(){
     return 0;
 }
 
-Package* mock_create_package(){
-    char s[30] = {0};
-    printf("please input someting:");
-    gets(s);
-    Package * pkg = (Package*)malloc(sizeof(Package)+sizeof(s));
-    memcpy(pkg->buf,s,sizeof(s));
-    pkg->bufferLength = sizeof(s);
-    pkg->function = 10;
-    pkg->extendedFlag = 23;
-    pkg->dataArray[0] = 33;
-    pkg->dataArray[1] = 44;
-    return pkg;
+/*start a new game and initialize a new game!*/
+void game_start(pthread_t Thread[],int Clnt_Sock[])
+{
+    pthread_mutex_init(&mut,NULL);  // intialize the mutex lock
+    // initialize game msg
+    Game_Msg* gameMsg = (Game_Msg*)malloc(sizeof(Game_Msg));
+    memset(gameMsg,0,sizeof(Game_Msg)); // put to zero
+    gameMsg->clnt_sock[0] = Clnt_Sock[0];
+    gameMsg->clnt_sock[1] = Clnt_Sock[1];
+    gameMsg->worb = blackside;
+    //create two pthreads
+    pthread_create(&Thread[0],NULL,pthread_func,(void*)gameMsg);
+    pthread_create(&Thread[1],NULL,pthread_func,(void*)gameMsg);
+    thread_wait(Thread);
+    close_game(gameMsg);
 }
 
 /*pthread_func: when a clnt is accepted, one pthread is created
@@ -141,6 +99,7 @@ void* pthread_func(void* args)
         player_side = blackside;
         self_sock = gameMsg->clnt_sock[0];
         competitor_sock = gameMsg->clnt_sock[1];
+        printf("player0's side is black\n");
     }
     else{
         gameMsg->thread[1] = pthread_self();
@@ -148,6 +107,7 @@ void* pthread_func(void* args)
         player_side = whiteside;
         self_sock = gameMsg->clnt_sock[1];
         competitor_sock = gameMsg->clnt_sock[0];
+        printf("player1's side is white\n");
     }
     pthread_mutex_unlock(&mut);  //unlock the gameMsg
     //printf("I am player%d\nmy sock is %d\n",player_num,self_sock);
@@ -178,111 +138,13 @@ void* pthread_func(void* args)
         pkg = (Package*)buffer;    // ctrl the pkg
         if_error = pkg_process(pkg,gameMsg,self_sock,competitor_sock,player_side);
         if(if_error!=0)
-            perror("something wrong in pkg, function:%d\n",if_error);
-        if(check_win());  // need to supplement!
-            break;
+            printf("player%d:something wrong in pkg, function:%d\n",player_num,if_error);
+        /*if(check_win());  // need to supplement!
+            break;*/
     }
 
     pthread_exit(NULL);
 }
 
-/*game start!*/
-void game_start(pthread_t Thread[],int Clnt_Sock[])
-{
-    pthread_mutex_init(&mut,NULL);  // intialize the mutex lock
-    // initialize game msg
-    Game_Msg* gameMsg = (Game_Msg*)malloc(sizeof(Game_Msg));
-    memset(gameMsg,0,sizeof(Game_Msg)); // put to zero
-    gameMsg->clnt_sock[0] = Clnt_Sock[0];
-    gameMsg->clnt_sock[1] = Clnt_Sock[1];
-    gameMsg->worb = blackside;
-    //create two pthreads
-    pthread_create(&Thread[0],NULL,pthread_func,(void*)gameMsg);
-    pthread_create(&Thread[1],NULL,pthread_func,(void*)gameMsg);
-    thread_wait(Thread);
-    close_game(gameMsg);
-}
 
-/*wait two thread to finish*/
-void thread_wait(pthread_t thread[])
-{
-    /*等待线程结束*/
-    if(thread[0] !=0)
-    {       
-            pthread_join(thread[0],NULL);
-            printf("线程1已经结束\n");
-    }
-    if(thread[1] !=0) 
-    {  
-            pthread_join(thread[1],NULL);
-            printf("线程2已经结束\n");
-    }
-}
-
-/*close the game and free everything here*/
-void close_game(Game_Msg* gameMsg)
-{
-    close(gameMsg->clnt_sock[0]);
-    close(gameMsg->clnt_sock[1]);
-    free(gameMsg);
-    printf("game closed!\n");
-}
-
-/*create a package to head ptr*/
-void create_package(Package* head,int F,int Ex,int arr1,int arr2,int BFL,char* BUF)
-{
-    head->function = F;
-    head->bufferLength = BFL;
-    head->dataArray[0] = arr[0];
-    head->dataArray[1] = arr[1];
-    head->extendedFlag = Ex;
-    if(BFL!=0){
-        memcpy(head->buf,BUF,BFL);
-    }
-}
-
-/*deal with the package*/
-int pkg_process(Package* pkg, Game_Msg* msg, int self_sock, int competitor_sock, Chess_Msg side)
-{
-    int if_error = 0;
-    switch(pkg->function){
-        case 2:  // chess position
-            int x = pkg->dataArray[0];
-            int y = pkg->dataArray[1];
-            pthread_mutex_lock(&mut);
-            if(msg->worb==side && msg->bored[x][y]==blank)   // it's your turn
-            {
-                msg->round_num = msg->round_num + 1; // round ++
-                msg->bored_round[x][y] = msg->round_num;  //  record round
-                msg->bored[x][y] = msg->worb;  // bored position
-                msg->worb = (side==whiteside?blackside:whiteside);  // change turn
-            }
-            else
-            {
-                perror("sent chess position wrong\n");
-                if_error = 2;
-            }
-            pthread_mutex_unlock(&mut);
-            if(if_error==0)
-            {
-                write(competitor_sock,pkg,sizeof(Package)); //forward to the competitor
-            }
-            
-            break
-        case 4:   // message
-            write(competitor_sock,pkg,sizeof(Package)+pkg->bufferLength); // forward without check
-            break
-        default:
-            if_error = pkg->function;
-            break
-    }
-
-
-    return if_error;
-}
-
-/*to check if the game is over*/
-void check_win(){
-
-}
 
