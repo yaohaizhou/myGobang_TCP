@@ -12,6 +12,7 @@
 /*global variable define*/
 int clnt_wait = 0;
 pthread_mutex_t mut;
+int error_count = 0;
 
 int main(){
     int serv_sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
@@ -72,6 +73,7 @@ void game_start(pthread_t Thread[],int Clnt_Sock[])
     gameMsg->clnt_sock[0] = Clnt_Sock[0];
     gameMsg->clnt_sock[1] = Clnt_Sock[1];
     gameMsg->worb = blackside;
+    gameMsg->winner = blank;
     //create two pthreads
     pthread_create(&Thread[0],NULL,pthread_func,(void*)gameMsg);
     pthread_create(&Thread[1],NULL,pthread_func,(void*)gameMsg);
@@ -132,15 +134,20 @@ void* pthread_func(void* args)
 
     int if_error = 0;  // if error occured, it store the pkg->function
     printf("start to listen to player%d for chess msg\n",player_num);
-    while(1)  // start to loop to collect chess msg
+    while(error_count<10)  // start to loop to collect chess msg
     {
         read(self_sock,buffer,BUFFER_SIZE);  // receive a package
         pkg = (Package*)buffer;    // ctrl the pkg
         if_error = pkg_process(pkg,gameMsg,self_sock,competitor_sock,player_side);
         if(if_error!=0)
+        {
             printf("player%d:something wrong in pkg, function:%d\n",player_num,if_error);
-        /*if(check_win());  // need to supplement!
-            break;*/
+            error_count++;
+        }
+        if(gameMsg->winner!=blank){
+            printf("winner is %d\n",gameMsg->winner);
+            break;
+        }
     }
 
     pthread_exit(NULL);

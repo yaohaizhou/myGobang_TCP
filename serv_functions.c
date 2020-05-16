@@ -11,6 +11,43 @@
 
 extern int clnt_wait;
 extern pthread_mutex_t mut;
+extern int error_count;
+
+#ifdef DEBUG
+typedef enum chess_msg{
+    blackside = 1,
+    whiteside = -1,
+    blank = 0
+} Chess_Msg;
+
+/*package define*/
+typedef struct package{
+    int function;
+    int extendedFlag;
+    int dataArray[2];
+    int bufferLength;
+    char buf[];
+} Package;
+
+/*the clnt list node define*/
+typedef struct clnt_node{
+    int clnt_sock;
+    struct clnt_node* nextptr;
+} Clnt_Node;
+
+/*game_msg*/
+typedef struct game_msg{
+    pthread_t thread[2];
+    int clnt_sock[2];
+    Chess_Msg bored[15][15];
+    int bored_round[15][15];
+    Chess_Msg worb;
+    char player[2][30];
+    int round_num;
+    Chess_Msg winner;
+} Game_Msg;
+
+#endif
 
 Package* mock_create_package(){
     char s[30] = {0};
@@ -68,8 +105,8 @@ void create_package(Package* head,int F,int Ex,int arr1,int arr2,int BFL,char* B
 int pkg_process(Package* pkg, Game_Msg* msg, int self_sock, int competitor_sock, Chess_Msg side)
 {
     int if_error = 0;
-    int x = pkg->dataArray[0]-1;//1-15 to 0-14
-    int y = pkg->dataArray[1]-1;//1-15 to 0-14
+    int x = pkg->dataArray[0];//1-15
+    int y = pkg->dataArray[1];//1-15
     switch(pkg->function){
         case 2:  // chess position
             pthread_mutex_lock(&mut);
@@ -92,7 +129,7 @@ int pkg_process(Package* pkg, Game_Msg* msg, int self_sock, int competitor_sock,
             {
                 write(competitor_sock,pkg,sizeof(Package)); //forward to the competitor
             }
-            
+            msg->winner = check_win(msg->bored,x,y,side);  // check winner
             break;
         case 4:   // message
             write(competitor_sock,pkg,sizeof(Package)+pkg->bufferLength); // forward without check
@@ -107,6 +144,70 @@ int pkg_process(Package* pkg, Game_Msg* msg, int self_sock, int competitor_sock,
 }
 
 /*to check if the game is over*/
-void check_win(){
-    
+Chess_Msg check_win(Chess_Msg board[][17] , int x , int y , Chess_Msg target)  // to check if one side win/return the result
+{
+   int number = 1;  // to check how many cheese are in a row
+   int i = 0 , i2 = 0; // counter
+
+   for(i = -1 ; i != 3 ; i += 2)
+   {
+      for(i2 = 1 ; i2 < 5 ; i2++)
+      {
+         if(board[x+i*i2][y]==target)
+            number++;
+         else
+            break;
+      }
+   }
+   if(number>=5)
+      return target;
+   else
+      number = 1;
+
+   for(i = -1 ; i != 3 ; i += 2)
+   {
+      for(i2 = 1 ; i2 < 5 ; i2++)
+      {
+         if(board[x][y+i*i2]==target)
+            number++;
+         else
+            break;
+      }
+   }
+   if(number>=5)
+      return target;
+   else
+      number = 1;
+
+   for(i = -1 ; i != 3 ; i += 2)
+   {
+      for(i2 = 1 ; i2 < 5 ; i2++)
+      {
+         if(board[x+i*i2][y+i*i2]==target)
+            number++;
+         else
+            break;
+      }
+   }
+   if(number>=5)
+      return target;
+   else
+      number = 1;
+
+   for(i = -1 ; i != 3 ; i += 2)
+   {
+      for(i2 = 1 ; i2 < 5 ; i2++)
+      {
+         if(board[x-i*i2][y+i*i2]==target)
+            number++;
+         else
+            break;
+      }
+   }
+   if(number>=5)
+      return target;
+   else
+      number = 1;
+
+   return blank;
 }
