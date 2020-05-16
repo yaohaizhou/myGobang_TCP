@@ -13,7 +13,9 @@
 #include <Windows.h>
 #pragma comment(lib, "ws2_32.lib")
 
-#define IP_ADDRESS "120.79.219.131"
+#define IP_ADDRESS "39.99.228.164"
+//39.99.228.164
+//120.79.219.131
 #pragma pack(1)
 #define Port 5000
 /// ////////////////////////
@@ -30,7 +32,7 @@
 #define WALL 3///棋盘四周围一圈墙
 #define EMPTY 0///空地为0
 #define BLACK 1///黑为1
-#define WHITE 2///白为0
+#define WHITE 2///白为2
 ///下棋模式
 #define DEBUG 0///1为开启debug，0为关闭debug，开启debug会在棋局最后显示棋盘各点的评估值
 //#define FIRST 1///1为人类执黑先手，0为AI执黑先手
@@ -75,13 +77,15 @@ public:
     void AI_1_MAX();
     int AI_2_MIN(int);
     int AI_3_MAX(int, int);
+
     void TCP_package();
     void create_game();
     void printPack(Package *package);
     void offense_or_defense();
     void recvPackage();
-    void sendPackage(int,int,int,int,int);
+    void sendPackage(int, int, int, int, int);
     Package* mock_create_package();
+    void send_TCP();
 
     typedef struct order
     {
@@ -97,6 +101,8 @@ public:
     Package* recv_package;
     Package* send_package;
     struct sockaddr_in serv_addr;
+//    int count_printboard;
+//    int count_send;
 
 private:
     int chess[N + 2][N + 2];///棋盘周围有一圈墙

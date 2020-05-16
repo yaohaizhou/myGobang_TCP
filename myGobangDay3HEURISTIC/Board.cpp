@@ -57,8 +57,10 @@ Board::Board()
     dy = { 0, 1, 1, 1, 0, -1, -1, -1 };
     is_end = true;
     msg = {0};
-    orderSort[AI_MAX_CHOICE]={0};
-    FIRST=1;
+    orderSort[AI_MAX_CHOICE] = {0};
+    FIRST = 1;
+//    count_printboard=0;
+//    count_send=0;
 }
 Board::~Board()
 {
@@ -75,6 +77,9 @@ Board::~Board()
 void Board::printBoard()
 {
     int i, j;
+//    count_printboard++;
+//    xyprintf(750,210,"%d",count_printboard);
+
     setbkcolor(EGERGB(173, 92, 45));///设置背景颜色
     setcolor(EGERGB(0, 0, 0));
     for(i = 60; i < 510; i += 30)
@@ -124,21 +129,26 @@ void Board::player1()
 {
     ///TODO:
     ///1. FIRST保持原状不动，把else改为TCP_package()
-    ///2.
+    ///2. 现在当前客户端下完棋之后不会显示，在对面客户端有显示
+    ///   反驳下面的注释，不应该是recv的问题，因为现在send在print之后，所以？？？
     turn = 1;
-    if(FIRST)
+    if(FIRST)///服务端那边黑色发送的是0，白色发送的是1
     {
-        getMouseLoc();
-        sendPackage(2,0,getRow(),getCol(),0);
+        TCP_package();///这是从对手过来的信息，对手先手的话依旧是黑棋落子
+        chess[getRow()][getCol()] = 1;
+        printBoard();
+        checkEnd();
     }
     else
     {
-//        getMouseLoc();
-        TCP_package();
+        getMouseLoc();
+        chess[getRow()][getCol()] = 1;
+//        count_printboard++;
+//        xyprintf(750,210,"count_printboard:%d",count_printboard);
+        printBoard();
+        send_TCP();
+        checkEnd();
     }
-    chess[row][col] = 1;
-    printBoard();
-    checkEnd();
 }
 /**
  * @name: player2
@@ -150,21 +160,30 @@ void Board::player2()
 {
     ///TODO:
     ///1. else保持原状不动，把FIRST改为TCP_package()
-    ///2.
+    ///2. 经过排查在recv的地方出现了问题，如果不开TCP_package则前一个客户端表现良好
+    ///   但是一旦开了TCP_package则前一个客户端不能显示当前落子
     turn = 2;
     if(FIRST)
     {
-//        getMouseLoc();
-        TCP_package();
+        getMouseLoc();
+        chess[getRow()][getCol()] = 2;///自己是白棋
+        printBoard();
+        send_TCP();
+
+        checkEnd();
     }
     else
     {
-        getMouseLoc();
-        sendPackage(2,0,getRow(),getCol(),0);
+        TCP_package();
+
+//        getMouseLoc();
+
+        chess[getRow()][getCol()] = 2;
+//        count_printboard++;
+//        xyprintf(750,210,"count_printboard:%d",count_printboard);
+        printBoard();
+        checkEnd();
     }
-    chess[row][col] = 2;
-    printBoard();
-    checkEnd();
 }
 /**
  * @name: checkEnd
@@ -493,34 +512,36 @@ void Board::AI_1_MAX()
     if(HEURISTIC)
     {
         ///启发式搜索
-        for(i=1;i<N+1;i++)
+        for(i = 1; i < N + 1; i++)
         {
-            for(j=1;j<N+1;j++)
+            for(j = 1; j < N + 1; j++)
             {
-                orderSort[(i-1)*15+(j-1)].orderi=i;///给结构体成员赋值i/j/point
-                orderSort[(i-1)*15+(j-1)].orderj=j;
-                orderSort[(i-1)*15+(j-1)].orderpoint=getScore(i,j);
+                orderSort[(i - 1) * 15 + (j - 1)].orderi = i; ///给结构体成员赋值i/j/point
+                orderSort[(i - 1) * 15 + (j - 1)].orderj = j;
+                orderSort[(i - 1) * 15 + (j - 1)].orderpoint = getScore(i, j);
             }
         }
-        std::sort(orderSort,orderSort+N*N,cmp);
-        for(i=0;i<AI_MAX_CHOICE;i++)
+        std::sort(orderSort, orderSort + N * N, cmp);
+        for(i = 0; i < AI_MAX_CHOICE; i++)
         {
-            if(!checkAvailable(orderSort[i].orderi,orderSort[i].orderj))continue;
-            if(orderSort[i].orderpoint==0)continue;
-            if(orderSort[i].orderpoint==50000)
+            if(!checkAvailable(orderSort[i].orderi, orderSort[i].orderj))
+                continue;
+            if(orderSort[i].orderpoint == 0)
+                continue;
+            if(orderSort[i].orderpoint == 50000)
             {
-                row=orderSort[i].orderi;
-                col=orderSort[i].orderj;
+                row = orderSort[i].orderi;
+                col = orderSort[i].orderj;
                 return;
             }
-            chess[orderSort[i].orderi][orderSort[i].orderj]=turn;
-            temp=AI_2_MIN(score);
-            chess[orderSort[i].orderi][orderSort[i].orderj]=EMPTY;
-            if(temp>score)
+            chess[orderSort[i].orderi][orderSort[i].orderj] = turn;
+            temp = AI_2_MIN(score);
+            chess[orderSort[i].orderi][orderSort[i].orderj] = EMPTY;
+            if(temp > score)
             {
-                score=temp;
-                row=orderSort[i].orderi;
-                col=orderSort[i].orderj;
+                score = temp;
+                row = orderSort[i].orderi;
+                col = orderSort[i].orderj;
             }
         }
     }
@@ -591,7 +612,7 @@ int Board::AI_2_MIN(int score1)
                 chess[i][j] = EMPTY;
                 return -50000;
             }
-            temp = AI_3_MAX(score,temp);
+            temp = AI_3_MAX(score, temp);
             chess[i][j] = EMPTY;
             if(temp < score)
                 score = temp;///第二层取极小值
@@ -619,7 +640,7 @@ int Board::AI_2_MIN(int score1)
  * @param {int} score2 从第二层传下来的维护极小值 {int} tempp 第二层当前计算值，用于提高难度/速度
  * @return: {int} score 从第三层返回极大值
  */
-int Board::AI_3_MAX(int score2,int tempp)
+int Board::AI_3_MAX(int score2, int tempp)
 {
     int score = -100000, temp = 0;
     for(int i = 1; i < N + 1; i++)
@@ -667,7 +688,7 @@ int Board::AI_3_MAX(int score2,int tempp)
  * @param {Order} x {Order} y 两个结构体
  * @return: bool
  */
-bool Board::cmp(Order x,Order y)
+bool Board::cmp(Order x, Order y)
 {
     return (x.orderpoint) > (y.orderpoint);
 }
@@ -675,8 +696,8 @@ bool Board::cmp(Order x,Order y)
 void Board::TCP_package()
 {
     recvPackage();
-    row=recv_package->dataArray[0];
-    col=recv_package->dataArray[1];
+    row = recv_package->dataArray[0];
+    col = recv_package->dataArray[1];
     return;
 }
 
@@ -686,7 +707,7 @@ void Board::create_game()
     // 初始化Windows Socket
     // WSAStartup函数对Winsock服务的初始化
     WSAStartup(MAKEWORD(2, 2), &s);
-    int ret=0;
+//    int ret = 0;
 
 //    TODO：把connect单独拉出来，到connect为止，去掉while循环
     sock = socket(AF_INET, SOCK_STREAM, 0);
@@ -698,81 +719,100 @@ void Board::create_game()
 
     if(connect(sock, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) == -1)
     {
-        xyprintf(750,250,"Connect failed!");
+        xyprintf(750, 250, "Connect failed!");
         return;
     }
     else
     {
-        xyprintf(750,250,"Connect success!");
+        xyprintf(750, 250, "Connect success!");
     }
+
+//    void Board::sendPackage(int func,int extflag,int array_first,int array_second,int buflength)
+    sendPackage(0, 0, 0, 0, 0);
 
     return;
 }
 void Board::printPack(Package *package)
 {
-    xyprintf(750,270,"Function: %d",package->function);
-    xyprintf(750,290,"extendedFlag: %d",package->extendedFlag);
-    xyprintf(750,310,"dataArray[0]: %d",package->dataArray[0]);
-    xyprintf(750,330,"dataArray[1]: %d",package->dataArray[1]);
-    xyprintf(750,350,"bufferLength: %d",package->bufferLength);
+    xyprintf(750, 270, "Function: %2d", package->function);
+    xyprintf(750, 290, "extendedFlag: %2d", package->extendedFlag);
+    xyprintf(750, 310, "dataArray[0]: %2d", package->dataArray[0]);
+    xyprintf(750, 330, "dataArray[1]: %2d", package->dataArray[1]);
+    xyprintf(750, 350, "bufferLength: %2d", package->bufferLength);
 //    xyprintf(750,370,"buf: %s",package->buf);
 }
 
 void Board::offense_or_defense()
 {
     recvPackage();
-    FIRST=recv_package->extendedFlag;
+    FIRST = recv_package->extendedFlag;
     return;
 }
 
 void Board::recvPackage()
 {
     ///读取服务器传回的数据
-    char buffer[200]={0};
+//    char buffer[200] = {0};
+//
+//    int ret = recv(sock, buffer, sizeof(buffer), 0);
+//
+//    if(ret < 0)
+//    {
+//        xyprintf(750, 410, "Read message error.");
+//        return;
+//    }
+//    recv_package = (Package*)malloc(sizeof(Package));
+//    recv_package = (Package *)buffer;
+////    printPack(recv_package);
 
-    int ret = recv(sock, buffer, sizeof(buffer) - 1,0);
-
+    ///此处不用buffer中转，但是实现效果一样
+    recv_package=(Package*)malloc(sizeof(Package));
+    int ret=recv(sock,reinterpret_cast <char*>(recv_package),sizeof(Package),0);
+    printPack(recv_package);
     if(ret < 0)
     {
-        xyprintf(750,410,"Read message error.");
+        xyprintf(750, 410, "Read message error.");
         return;
     }
 
-    recv_package = (Package *)buffer;
-    printPack(recv_package);
-
     return;
 }
-void Board::sendPackage(int func,int extflag,int array_first,int array_second,int buflength)
+void Board::sendPackage(int func, int extflag, int array_first, int array_second, int buflength)
 {
-
-    send_package=(Package*)malloc(sizeof(Package));
+//    count_send++;
+//    xyprintf(750,190,"count_send:%d",count_send);
+    send_package = (Package*)malloc(sizeof(Package));
     send_package->bufferLength = buflength;
     send_package->function = func;
     send_package->extendedFlag = extflag;
     send_package->dataArray[0] = array_first;
     send_package->dataArray[1] = array_second;
 
-    int ret = send(sock,reinterpret_cast<char*> (send_package),sizeof(Package),0);
-    if(ret<0)
+    int ret = send(sock, reinterpret_cast<char*> (send_package), sizeof(Package), 0);
+    if(ret < 0)
     {
-        xyprintf(750,390,"Write message error.");
+        xyprintf(750, 390, "Write message error.");
         return;
     }
 
     return;
 }
-Package* Board::mock_create_package(){
+Package* Board::mock_create_package()
+{
 //    char s[30] = {0};
 //    printf("\nplease input someting:");
 //    gets(s);
     Package * pkg = (Package*)malloc(sizeof(Package));
 //    Package * pkg = (Package*)malloc(sizeof(Package)+sizeof(s));
 //    memcpy(pkg->buf,s,sizeof(s));
-    pkg->bufferLength = 1;
+    pkg->bufferLength = 0;
     pkg->function = 2;
     pkg->extendedFlag = 0;
     pkg->dataArray[0] = getRow();
     pkg->dataArray[1] = getCol();
     return pkg;
+}
+void Board::send_TCP()
+{
+    sendPackage(2, 0, getRow(), getCol(), 0);
 }

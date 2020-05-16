@@ -70,10 +70,10 @@
 1581777314 source:d:\workspaces\cbproject\mygobangday3cutelt\board.cpp
 	"Board.h"
 
-1589518930 source:d:\workspaces\cbproject\mygobangday3heuristic\board.cpp
+1589594897 source:d:\workspaces\cbproject\mygobangday3heuristic\board.cpp
 	"Board.h"
 
-1589518028 d:\workspaces\cbproject\mygobangday3heuristic\board.h
+1589594877 d:\workspaces\cbproject\mygobangday3heuristic\board.h
 	<stdio.h>
 	<Windows.h>
 	<iostream>
@@ -84,6 +84,6 @@
 	<graphics.h>
 	<algorithm>
 
-1589445381 source:d:\workspaces\cbproject\mygobangday3heuristic\main.cpp
+1589522609 source:d:\workspaces\cbproject\mygobangday3heuristic\main.cpp
 	"Board.h"
 
